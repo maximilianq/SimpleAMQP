@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {simpleamqp = "src" }
+
+[project]
+name = "simpleamqp"
+version = "0.0.1"
+authors = [
+  {name = "Maximilian Quaeck", email = "maximilian.quaeck@gmx.de"}
+]
+description = "Simple and Fast Toolkit to send/recieve notifications and execute remote procedure calls build apon aiormq."
+dependencies = [
+    "aiormq >= 6.7.7"
+]
