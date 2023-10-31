@@ -1,4 +1,6 @@
-from typing import Callable
+from inspect import iscoroutinefunction
+
+from typing import Callable, Awaitable
 
 from uuid import UUID as uuid, uuid4
 
@@ -215,8 +217,15 @@ class AMQPClient:
         
         try:
 
-            # execute the callback method to retrieve a response
-            result: object = self.handlers[entity][operation](data)
+            # retrieve the handler method
+            handler: Callable | Awaitable = self.handlers[entity][operation]
+            result: object = None
+
+            # execute the handler method either synchronously or asynchronously to retrieve a response
+            if iscoroutinefunction(handler):
+                result = await handler(data)
+            else:
+                result = handler(data)
 
             # send the response to the exchange using the given response routing key
             await message.channel.basic_publish(
@@ -274,11 +283,23 @@ class AMQPClient:
 
         self.logger.info(f'Recieved notification of event {event} on {entity}.')
         
+        # try to parse content of message to json otherwise retain original type
+        data: dict[str, object] | list[object] | object = message
+        try:
+            data = loads(message.body)
+        except ValueError:
+            data = message
+
         try:
 
             # iterate through all listeners and execute the corresponding callback method
             for listener in self.listeners[entity][event]:
-                listener(message.body)
+
+                # execute the listener method either synchronously or asynchronously to retrieve a response
+                if iscoroutinefunction(listener):
+                    await listener(data)
+                else:
+                    listener(data)
 
         except Exception as exception:
 
