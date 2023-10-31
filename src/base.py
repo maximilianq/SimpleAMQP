@@ -4,7 +4,7 @@ from typing import Callable, Awaitable
 
 from uuid import UUID as uuid, uuid4
 
-from json import loads
+from json import loads, dumps
 
 from aiormq import connect, spec
 from aiormq.abc import DeliveredMessage as Message
@@ -123,11 +123,17 @@ class AMQPClient:
 
         self.logger.info(f'Send notification of event {event} on {entity}.')
 
+        message: bytes
+        try:
+            message = dumps(data).encode('utf-8')
+        except ValueError:
+            message: bytes = str(data).encode('utf-8')
+
         # send the notification to the exchange using an appropriate routing key
         await self.channel.basic_publish(
             exchange=self.application,
             routing_key=f'notify.{entity}.{event}',
-            body=data
+            body=message
         )
 
     async def request(self, entity: str, operation: str, data: object) -> object:
@@ -139,6 +145,12 @@ class AMQPClient:
 
         self.logger.info(f'Send request of operation {operation} on {entity} ({request.guid}).')
         
+        message: bytes
+        try:
+            message = dumps(data).encode('utf-8')
+        except ValueError:
+            message: bytes = str(data).encode('utf-8')
+
         # send the request to the exchange using an appropriate routing key
         await self.channel.basic_publish(
             exchange = self.application,
@@ -147,7 +159,7 @@ class AMQPClient:
                 correlation_id = str(request.guid),
                 reply_to = f'response.{self.service}'
             ),
-            body=data
+            body=message
         )
 
         # wait until the result of the request was recieved and return the data
@@ -207,11 +219,11 @@ class AMQPClient:
         _, entity, operation = message.routing_key.split('.')
 
         # try to parse content of message to json otherwise retain original type
-        data: dict[str, object] | list[object] | object = message
+        data: dict[str, object] | list[object] | object
         try:
             data = loads(message.body)
         except ValueError:
-            data = message
+            data = message.body
 
         self.logger.info(f'Recieved request of operation {operation} on {entity} ({message.header.properties.correlation_id}).')
         
@@ -260,11 +272,11 @@ class AMQPClient:
         request: Request = self.requests[uuid(message.header.properties.correlation_id)]
 
         # try to parse content of message to json otherwise retain original type
-        data: dict[str, object] | list[object] | object = message
+        data: dict[str, object] | list[object] | object
         try:
             data = loads(message.body)
         except ValueError:
-            data = message
+            data = message.body
 
         self.logger.info(f'Recieved response to request {request.guid}.')
 
@@ -284,11 +296,11 @@ class AMQPClient:
         self.logger.info(f'Recieved notification of event {event} on {entity}.')
         
         # try to parse content of message to json otherwise retain original type
-        data: dict[str, object] | list[object] | object = message
+        data: dict[str, object] | list[object] | object
         try:
             data = loads(message.body)
         except ValueError:
-            data = message
+            data = message.body
 
         try:
 

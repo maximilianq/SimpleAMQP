@@ -7,7 +7,7 @@ package-dir = {simpleamqp = "src" }
 
 [project]
 name = "simpleamqp"
-version = "0.0.2"
+version = "0.0.3"
 authors = [
   {name = "Maximilian Quaeck", email = "maximilian.quaeck@gmx.de"}
 ]
