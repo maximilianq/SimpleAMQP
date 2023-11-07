@@ -239,14 +239,20 @@ class AMQPClient:
             else:
                 result = handler(data)
 
+            response: bytes
+            try:
+                response = dumps(result).encode('utf-8')
+            except TypeError:
+                response: bytes = str(result).encode('utf-8')
+
             # send the response to the exchange using the given response routing key
             await message.channel.basic_publish(
                 exchange = self.application,
                 routing_key = message.header.properties.reply_to,
-                body = result,
                 properties = spec.Basic.Properties(
                     correlation_id = message.header.properties.correlation_id
-                )
+                ),
+                body = response
             )
 
         except Exception:
@@ -268,6 +274,13 @@ class AMQPClient:
 
     async def _handle_response(self, message: Message):
 
+        if uuid(message.header.properties.correlation_id) not in self.requests:
+
+            await message.channel.basic_reject(
+                delivery_tag = message.delivery.delivery_tag,
+                requeue = False
+            )
+
         # retrieve the matching request of the response
         request: Request = self.requests[uuid(message.header.properties.correlation_id)]
 
@@ -281,7 +294,7 @@ class AMQPClient:
         self.logger.info(f'Recieved response to request {request.guid}.')
 
         # match the resulting data to the request and unlock the process
-        request.set(data)
+        await request.set(data)
 
         # confirm the successfull processing of the message
         await message.channel.basic_ack(
@@ -313,9 +326,7 @@ class AMQPClient:
                 else:
                     listener(data)
 
-        except Exception as exception:
-
-            print(entity, event, self.listeners)
+        except Exception:
 
             self.logger.info(f'Notification could not be processed.')
         
